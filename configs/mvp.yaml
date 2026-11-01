@@ -1,0 +1,110 @@
+# MVP configuration. All airport / operator / type / date literals live here, not in code.
+
+paths:
+  data: data
+  raw: data/raw
+  ref: data/ref
+  processed: data/processed
+  figures: figures
+
+window:
+  start: 2024-01-01
+  end: null            # null = latest available
+  # Day sampling for the ADS-B ingest. 1 = every day. Full archive is ~3 TB of
+  # downloads (~3 GB/day); see docs/DECISIONS.md.
+  day_stride: 1
+
+events:
+  - {name: deminimis_cn_hk, date: 2025-05-02, label: "De minimis ends (China/HK)"}
+  - {name: deminimis_global, date: 2025-08-29, label: "De minimis suspended (global)"}
+
+# Seasonality markers (not treatment events)
+markers:
+  - {name: lny_2024, start: 2024-02-10, end: 2024-02-24, label: "Lunar New Year 2024"}
+  - {name: lny_2025, start: 2025-01-29, end: 2025-02-12, label: "Lunar New Year 2025"}
+  - {name: lny_2026, start: 2026-02-17, end: 2026-03-03, label: "Lunar New Year 2026"}
+
+event_study:
+  window_weeks: 12
+  bootstrap_reps: 1000
+  treatment_lanes: [[CN_HK, US]]
+  control_lanes: [[CN_HK, EUROPE], [US, US], [EUROPE, US]]
+
+adsb:
+  source: adsblol
+  adsblol:
+    repo_template: adsblol/globe_history_{year}
+    tag_template: v{date}-planes-readsb-prod-0   # date as YYYY.MM.DD
+    keep_tarballs: false        # stream & discard; only filtered parquet + manifest kept
+    workers: 2                  # parallel days (bandwidth-bound)
+  capture:
+    radius_nm: 20
+    max_alt_ft: 10000
+    # Capture aircraft of these types seen near a target airport, even if not
+    # (yet) on the freighter whitelist. Freighter status is decided downstream.
+    candidate_types: [B748, B744, B77L, B77F, B763, A332, A333, MD11]
+
+airports:
+  treatment: [ZSPD, ZGGG, ZGSZ, VHHH, ZHCC, ZUUU, ZUTF]
+  waypoint: [PANC]
+  us_dest: [KORD, KLAX, KCVG, KJFK, KDFW, KMIA, KATL, KSDF, KMEM, KLCK, KONT]
+  control: [EDDP, ELLX, EHAM, EDDF, EBLG]
+  other_asia: [RKSI, RCTP, RJAA, WSSS, VTBS]
+  # Origin/destination assignment considers every airport of these OurAirports types.
+  assignable_types: [large_airport, medium_airport]
+
+# Region assignment by ICAO prefix (longest prefix wins).
+regions:
+  CN_HK: [Z, VH, VM]
+  ASIA_OTHER: [RK, RC, RJ, RO, RP, V, W]
+  ANC: [PANC]
+  US: [K, PA, PH]
+  CANADA: [C]
+  EUROPE: [E, L, B, U]
+  MIDEAST: [O]
+  LATAM: [S, M, T]
+  AFRICA: [D, F, G, H]
+  OCEANIA: [Y, N, A]
+
+identify:
+  leg_gap_min: 15
+  ground_alt_agl_ft: 300
+  endpoint_max_dist_nm: 10
+  tech_stop_airports: [PANC]
+  tech_stop_max_h: 6
+
+operators:
+  # Every target-type aircraft these operators fly is treated as a freighter.
+  all_cargo: [CKS, GTI, PAC, CLX, ICV, CKK, CAO, CSS, HYT, CYZ, NCA, UPS, FDX, WGN, NCR, ABW,
+              SQC, LCO, ABX, ATN, GEC, BOX, MPH, BCS, DHK, ICL, CLU, TAY, ABD, KYE, AJT]
+  # Fly both passenger and freighter variants of target types: needs per-registration evidence.
+  mixed: [CSN, CPA, KAL, AAR, CAL, EVA, QTR, UAE, ETD, CSH, CES, CCA, SIA, THY, AFR, KLM, DLH,
+          ETH, SVA, ANA, JAL, AAL, UAL, DAL]
+
+types:
+  B748: {review_when_mixed: true, freighter_models: ["747-8F"]}
+  B744: {review_when_mixed: true, freighter_models: ["747-400F", "747-400ERF", "747-400BCF", "747-400BDSF"]}
+  # Nearly every B77L is a 777F; the few 777-200LR passenger operators need review.
+  B77L: {review_when_mixed: true, freighter_unless_operator: [AIC, PIA, ACA, QTR, ETD, KAC], freighter_models: ["777F"]}
+  B77F: {freighter_only: true, freighter_models: ["777F"]}
+  B763: {freighter_models: ["767-300F", "767-300BCF", "767-300BDSF"]}
+  A332: {freighter_models: ["A330-200F", "A330-200P2F"]}
+  A333: {freighter_models: ["A330-300P2F"]}
+  MD11: {freighter_only: true, freighter_models: ["MD-11F"]}
+
+takeoff:
+  roll_min_gs_kt: 30
+  align_tol_deg: 10
+  lof_alt_ft: 50
+  lof_vrate_fpm: 300
+  climb_top_agl_ft: 1500
+  min_roll_points: 4
+  max_gap_near_lof_s: 15
+  max_lof_from_threshold_ft: 14000
+  runway_centerline_tol_m: 60
+
+refdata:
+  ourairports_airports: https://davidmegginson.github.io/ourairports-data/airports.csv
+  ourairports_runways: https://davidmegginson.github.io/ourairports-data/runways.csv
+  opensky_aircraft: https://s3.opensky-network.org/data-samples/metadata/aircraft-database-complete-2025-08.csv
+  metar_url: https://mesonet.agron.iastate.edu/cgi-bin/request/asos.py

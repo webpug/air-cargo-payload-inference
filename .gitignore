@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+data/raw/
+data/processed/
+data/ref/src/
+data/ref/*.parquet
+figures/*.html
+.ipynb_checkpoints/
+data/ref/review/
+.env
+*.pem
